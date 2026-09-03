@@ -31,3 +31,5 @@
 ~~다음은 `guide.md` 14번 MVP 1로 진행.~~ → `packages/core`(Runtime/Chat Interface 소유) + `packages/transformers`(Adapter) + `packages/react`(`BrowserAIProvider`/`useBrowserChat`)로 실제 구현, `examples/react-vite`에서 끝까지 동작 확인. 결과는 `MVP1-RESULTS.md` 참고.
 
 ~~다음은 `guide.md` 14번 MVP 2 — 읽기 전용 Browser Tool 3개 추가.~~ → `packages/tools`(getPageText/getSelectedText/findElement) + core의 다중 스텝 tool 호출 배선까지 구현. tool 정의가 모델까지 전달되는 건 확인했지만(모델이 우리 tool 이름/설명으로 추론함), 이 테스트 환경의 속도 문제로 실제 호출 완료까지는 못 봄. OOM(guide.md 9번이 예견한 실패 케이스)도 실제로 재현됐고 `dtype: "q4"`로 해결. 상세는 `MVP2-RESULTS.md` 참고.
+
+~~다음은 `guide.md` 14번 MVP 3 — Agent(상호작용 Tool, Tool 실행 상태 관리).~~ → `clickElement`/`fillInput`/`scrollPage` 추가, `activeTool` 상태 노출(`fullStream` 기반으로 재작성). 실제 느린 모델로 매번 기다리는 대신 가짜 `LanguageModelV4`로 유닛 테스트를 해서 로직을 결정적으로 검증했고, 그 과정에서 진짜 버그(`finishReason`이 문자열이면 tool이 조용히 실행 안 됨 — 우리 테스트 모델의 스펙 오류였지 core 코드 버그는 아니었음)를 하나 잡았다. 다만 **실제 모델+브라우저에서 tool 호출이 끝까지 완료되는 걸 본 적은 아직 없다** — MVP2부터 이어지는 숙제. 상세는 `MVP3-RESULTS.md` 참고.
