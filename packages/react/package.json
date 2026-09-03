@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./src/index.tsx",
   "types": "./src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
   "dependencies": {
     "@browser-ai-sdk/core": "*",
     "@browser-ai-sdk/transformers": "*",
