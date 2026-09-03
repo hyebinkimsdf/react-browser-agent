@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useRef,
   useSyncExternalStore,
   type ReactNode,
@@ -24,18 +25,39 @@ const ChatControllerContext = createContext<ChatController | null>(null);
  * chat controller and exposes it via context. Model loading starts as soon
  * as this mounts.
  *
- * Known MVP-1 gap: the controller is intentionally never disposed on unmount
- * (see design note in packages/react/README once written) to avoid
- * React StrictMode's mount→unmount→mount dev cycle tearing down the Worker
- * mid-load. Proper lifecycle management is deferred to MVP 2+.
+ * Dispose is deferred by one tick on unmount, and cancelled if a remount
+ * follows in the same tick — React StrictMode's dev-only mount→unmount→mount
+ * cycle runs synchronously, so this survives it, while a genuine unmount
+ * (no remount follows) still terminates the Worker.
  */
 export function BrowserAIProvider({ model, device, children }: BrowserAIProviderProps) {
   const controllerRef = useRef<ChatController | null>(null);
+  const disposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!controllerRef.current) {
     const runtime = createTransformersRuntime(model, { device });
     controllerRef.current = createChatController(runtime);
   }
+
+  useEffect(() => {
+    // Cancel a dispose scheduled by a StrictMode phantom unmount — this runs
+    // on both the real mount and StrictMode's simulated remount, whereas the
+    // component body only re-runs on an actual re-render (which does NOT
+    // happen between StrictMode's phantom cleanup and its remount).
+    if (disposeTimerRef.current !== null) {
+      clearTimeout(disposeTimerRef.current);
+      disposeTimerRef.current = null;
+    }
+
+    return () => {
+      const controller = controllerRef.current;
+      disposeTimerRef.current = setTimeout(() => {
+        controller?.dispose();
+        controllerRef.current = null;
+        disposeTimerRef.current = null;
+      }, 0);
+    };
+  }, []);
 
   return (
     <ChatControllerContext.Provider value={controllerRef.current}>

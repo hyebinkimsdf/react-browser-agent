@@ -37,9 +37,14 @@ const { messages, sendMessage, isLoading } = useBrowserChat();
 - 기준 7 "Chat 상태 관리가 React에서 자연스럽게 동작" — `useSyncExternalStore` + `createChatController`(core)로 실제 통과. PoC는 로컬 `useState`로 흉내만 냈던 부분.
 - 기준 10 "provider 장애/변경 시 우리 SDK 공개 API 유지 가능" — 구조적으로는 만족(`BrowserAIProvider`/`useBrowserChat`은 `@browser-ai/transformers-js`를 몰라도 됨, `packages/transformers`만 알고 있음). 다만 실제로 provider를 교체해보진 않았으니 완전한 검증은 아니다.
 
+## Worker/모델 dispose lifecycle (2026-09-03 추가 수정)
+
+`BrowserAIProvider` unmount 시 dispose를 한 tick 지연시키고, 그 사이에 재마운트가 오면 취소하는 방식으로 구현했다. React StrictMode의 mount→unmount→mount는 동기적으로 일어나므로 이 지연·취소로 버텨내고, 실제 unmount(재마운트가 뒤따르지 않음)에는 정상적으로 Worker를 종료한다.
+
+**처음 구현에 버그가 있었다**: 취소 로직을 컴포넌트 render 본문에 뒀더니, StrictMode의 phantom cleanup→remount 사이에는 render가 다시 일어나지 않아서 취소가 발동하지 않고 실제로 Worker가 죽어버렸다 (모델 로딩이 영원히 끝나지 않는 채로 확인됨). 취소 로직을 `useEffect`의 setup 함수 안으로 옮기고 나서야 — setup은 StrictMode가 다시 호출해주므로 — 의도대로 동작했다. Playwright로 재검증: StrictMode 이중 마운트에서 정상적으로 `ready`까지 도달했고, 실제 unmount→remount에서도 새 Worker로 재로딩이 정상 진행됐다.
+
 ## 알려진 한계 (의도적으로 미룬 것)
 
-- **Worker/모델 dispose 미구현**: `BrowserAIProvider`가 unmount될 때 `dispose()`를 호출하지 않는다. React StrictMode의 mount→unmount→mount 개발 사이클에서 Worker가 조기 종료되는 문제를 피하려고 일부러 뺐다. MVP 2 이전에 제대로 된 lifecycle 관리가 필요하다.
 - **Tool Calling 없음**: guide.md 14번 MVP 2 범위. `AI SDK Warning: toolChoice is not supported`는 우리가 안 써서 나는 정상적인 경고.
 - **`ai`/`@ai-sdk/provider` 버전 고정 여부 미검토**: `@browser-ai/transformers-js`의 peer dependency(`ai: ^7.0.0`)에 맞춰 설치했지만, 버전 범위 정책은 아직 안 정했다.
 
