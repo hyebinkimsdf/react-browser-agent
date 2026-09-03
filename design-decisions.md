@@ -28,4 +28,6 @@
 
 **다음 단계**: ~~`guide.md` 13번 원칙 ⑤에 따라 최소 PoC(모델 로딩 + 메시지 1개 스트리밍)부터 진행한다.~~ → `poc/`에서 실행 완료, 결과는 `poc/RESULTS.md` 참고. 모델 다운로드·스트리밍은 성공했고, WebGPU 실패 시 WASM 폴백도 실제로 재현·검증됐다.
 
-~~다음은 `guide.md` 14번 MVP 1로 진행.~~ → `packages/core`(Runtime/Chat Interface 소유) + `packages/transformers`(Adapter) + `packages/react`(`BrowserAIProvider`/`useBrowserChat`)로 실제 구현, `examples/react-vite`에서 끝까지 동작 확인. 결과는 `MVP1-RESULTS.md` 참고. 다음은 `guide.md` 14번 MVP 2 — 읽기 전용 Browser Tool 3개 추가.
+~~다음은 `guide.md` 14번 MVP 1로 진행.~~ → `packages/core`(Runtime/Chat Interface 소유) + `packages/transformers`(Adapter) + `packages/react`(`BrowserAIProvider`/`useBrowserChat`)로 실제 구현, `examples/react-vite`에서 끝까지 동작 확인. 결과는 `MVP1-RESULTS.md` 참고.
+
+~~다음은 `guide.md` 14번 MVP 2 — 읽기 전용 Browser Tool 3개 추가.~~ → `packages/tools`(getPageText/getSelectedText/findElement) + core의 다중 스텝 tool 호출 배선까지 구현. tool 정의가 모델까지 전달되는 건 확인했지만(모델이 우리 tool 이름/설명으로 추론함), 이 테스트 환경의 속도 문제로 실제 호출 완료까지는 못 봄. OOM(guide.md 9번이 예견한 실패 케이스)도 실제로 재현됐고 `dtype: "q4"`로 해결. 상세는 `MVP2-RESULTS.md` 참고.
