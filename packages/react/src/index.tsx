@@ -3,10 +3,11 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { createChatController, type ChatController } from "@browser-ai-sdk/core";
+import { createChatController, type ChatController, type ChatState } from "@browser-ai-sdk/core";
 import type { ToolSet } from "ai";
 import {
   createTransformersRuntime,
@@ -24,12 +25,30 @@ export interface BrowserAIProviderProps {
   children: ReactNode;
 }
 
-const ChatControllerContext = createContext<ChatController | null>(null);
+/** Distinguishes "no provider above this hook" from "provider present, not yet initialized". */
+const NOT_IN_PROVIDER = Symbol("not-in-provider");
+type ContextValue = ChatController | null | typeof NOT_IN_PROVIDER;
+const ChatControllerContext = createContext<ContextValue>(NOT_IN_PROVIDER);
+
+const INITIAL_STATE: ChatState = {
+  status: "loading-model",
+  progress: 0,
+  messages: [],
+  error: null,
+  activeTool: null,
+};
+const getInitialState = () => INITIAL_STATE;
+const noopSubscribe = () => () => {};
 
 /**
  * Wires the Transformers Adapter (guide.md packages/transformers) to Core's
- * chat controller and exposes it via context. Model loading starts as soon
- * as this mounts.
+ * chat controller and exposes it via context.
+ *
+ * The runtime/controller is created inside an effect, not during render —
+ * Next.js (and any other SSR setup) renders "use client" components on the
+ * server too, where `Worker`/WebGPU/etc. don't exist. An effect only ever
+ * runs client-side, so this keeps the SDK SSR-safe (guide.md 6번) without
+ * every consumer having to remember `dynamic(..., { ssr: false })`.
  *
  * Dispose is deferred by one tick on unmount, and cancelled if a remount
  * follows in the same tick — React StrictMode's dev-only mount→unmount→mount
@@ -43,13 +62,9 @@ export function BrowserAIProvider({
   tools,
   children,
 }: BrowserAIProviderProps) {
+  const [controller, setController] = useState<ChatController | null>(null);
   const controllerRef = useRef<ChatController | null>(null);
   const disposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  if (!controllerRef.current) {
-    const runtime = createTransformersRuntime(model, { device, dtype });
-    controllerRef.current = createChatController(runtime, { tools });
-  }
 
   useEffect(() => {
     // Cancel a dispose scheduled by a StrictMode phantom unmount — this runs
@@ -61,18 +76,27 @@ export function BrowserAIProvider({
       disposeTimerRef.current = null;
     }
 
+    if (!controllerRef.current) {
+      const runtime = createTransformersRuntime(model, { device, dtype });
+      const created = createChatController(runtime, { tools });
+      controllerRef.current = created;
+      setController(created);
+    }
+
     return () => {
-      const controller = controllerRef.current;
+      const c = controllerRef.current;
       disposeTimerRef.current = setTimeout(() => {
-        controller?.dispose();
+        c?.dispose();
         controllerRef.current = null;
         disposeTimerRef.current = null;
       }, 0);
     };
+    // model/device/dtype/tools are intentionally init-only, same as before.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <ChatControllerContext.Provider value={controllerRef.current}>
+    <ChatControllerContext.Provider value={controller}>
       {children}
     </ChatControllerContext.Provider>
   );
@@ -80,14 +104,14 @@ export function BrowserAIProvider({
 
 export function useBrowserChat() {
   const controller = useContext(ChatControllerContext);
-  if (!controller) {
+  if (controller === NOT_IN_PROVIDER) {
     throw new Error("useBrowserChat() must be used inside <BrowserAIProvider>.");
   }
 
   const state = useSyncExternalStore(
-    controller.subscribe,
-    controller.getState,
-    controller.getState,
+    controller ? controller.subscribe : noopSubscribe,
+    controller ? controller.getState : getInitialState,
+    getInitialState,
   );
 
   return {
@@ -97,7 +121,7 @@ export function useBrowserChat() {
     error: state.error,
     activeTool: state.activeTool,
     isLoading: state.status === "loading-model" || state.status === "streaming",
-    sendMessage: controller.sendMessage,
-    stop: controller.stop,
+    sendMessage: controller ? controller.sendMessage : async () => {},
+    stop: controller ? controller.stop : () => {},
   };
 }
