@@ -1,0 +1,25 @@
+{
+  "name": "example-react-vite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@browser-ai-sdk/core": "*",
+    "@browser-ai-sdk/react": "*",
+    "@browser-ai-sdk/transformers": "*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  }
+}
