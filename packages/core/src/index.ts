@@ -32,12 +32,22 @@ export interface ChatMessage {
 
 export type ChatStatus = "loading-model" | "ready" | "streaming" | "error";
 
+/** A Browser Tool call in flight or just finished (guide.md 14, MVP 3 — Tool execution 상태 관리). */
+export interface ActiveToolCall {
+  toolName: string;
+  input: unknown;
+  status: "calling" | "done" | "error";
+  output?: unknown;
+}
+
 export interface ChatState {
   status: ChatStatus;
   /** 0-100, only meaningful while status is "loading-model". */
   progress: number;
   messages: ChatMessage[];
   error: string | null;
+  /** The most recent tool call this turn, or null between turns / once finished. */
+  activeTool: ActiveToolCall | null;
 }
 
 export interface ChatController {
@@ -64,6 +74,7 @@ export function createChatController(
     progress: 0,
     messages: [],
     error: null,
+    activeTool: null,
   };
   const listeners = new Set<() => void>();
   let model: LanguageModelV4 | null = null;
@@ -100,6 +111,7 @@ export function createChatController(
     setState({
       status: "streaming",
       error: null,
+      activeTool: null,
       messages: [...state.messages, userMessage, assistantMessage],
     });
 
@@ -115,15 +127,40 @@ export function createChatController(
         ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
       });
 
-      for await (const chunk of result.textStream) {
-        setState({
-          messages: state.messages.map((m) =>
-            m.id === assistantMessage.id ? { ...m, content: m.content + chunk } : m,
-          ),
-        });
+      // fullStream (not textStream) so tool-call/tool-result events surface too.
+      for await (const part of result.fullStream) {
+        switch (part.type) {
+          case "text-delta":
+            setState({
+              messages: state.messages.map((m) =>
+                m.id === assistantMessage.id ? { ...m, content: m.content + part.text } : m,
+              ),
+            });
+            break;
+          case "tool-call":
+            setState({
+              activeTool: { toolName: part.toolName, input: part.input, status: "calling" },
+            });
+            break;
+          case "tool-result":
+            setState({
+              activeTool: {
+                toolName: part.toolName,
+                input: part.input,
+                status: "done",
+                output: part.output,
+              },
+            });
+            break;
+          case "tool-error":
+            setState({
+              activeTool: { toolName: part.toolName, input: part.input, status: "error" },
+            });
+            break;
+        }
       }
 
-      setState({ status: "ready" });
+      setState({ status: "ready", activeTool: null });
     } catch (err) {
       setState({
         status: "error",
