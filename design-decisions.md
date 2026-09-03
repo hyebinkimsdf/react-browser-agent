@@ -26,4 +26,6 @@
 
 이 SDK의 정체성은 "Transformers.js용 React Wrapper"가 아니라 "React에서 Local Browser AI Agent를 만드는 SDK"다. provider와 AI SDK는 교체 가능한 부품이고, React API·Tool 시스템·Agent abstraction이 실제 가치다.
 
-**다음 단계**: ~~`guide.md` 13번 원칙 ⑤에 따라 최소 PoC(모델 로딩 + 메시지 1개 스트리밍)부터 진행한다.~~ → `poc/`에서 실행 완료, 결과는 `poc/RESULTS.md` 참고. 모델 다운로드·스트리밍은 성공했고, WebGPU 실패 시 WASM 폴백도 실제로 재현·검증됐다. 다음은 `guide.md` 14번 MVP 1(React + Local Model + Chat, `useChat` 통합 포함)로 진행.
+**다음 단계**: ~~`guide.md` 13번 원칙 ⑤에 따라 최소 PoC(모델 로딩 + 메시지 1개 스트리밍)부터 진행한다.~~ → `poc/`에서 실행 완료, 결과는 `poc/RESULTS.md` 참고. 모델 다운로드·스트리밍은 성공했고, WebGPU 실패 시 WASM 폴백도 실제로 재현·검증됐다.
+
+~~다음은 `guide.md` 14번 MVP 1로 진행.~~ → `packages/core`(Runtime/Chat Interface 소유) + `packages/transformers`(Adapter) + `packages/react`(`BrowserAIProvider`/`useBrowserChat`)로 실제 구현, `examples/react-vite`에서 끝까지 동작 확인. 결과는 `MVP1-RESULTS.md` 참고. 다음은 `guide.md` 14번 MVP 2 — 읽기 전용 Browser Tool 3개 추가.
