@@ -6,6 +6,12 @@ import "./App.css";
 // Tool calling needs a model that's actually decent at it — HF's own
 // integration guide recommends a reasoning model like Qwen3 over MVP 1's
 // tiny SmolLM2-360M for this reason.
+//
+// Tried Qwen3-1.7B for better Korean quality (0.6B's Korean output was
+// noticeably broken) but it OOMs in this dev environment even at the
+// smallest available quantization (q4: 2.15GB fails to even buffer the
+// download; q4f16: 1.43GB downloads fine but WASM session creation still
+// hits std::bad_alloc). Reverted to 0.6B, which is known to work.
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 
 function Chat() {
