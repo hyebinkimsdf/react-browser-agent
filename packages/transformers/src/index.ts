@@ -2,6 +2,16 @@ import { transformersJS } from "@browser-ai/transformers-js";
 import type { BrowserAIRuntime, RuntimeAvailability } from "@browser-ai-sdk/core";
 
 export type TransformersDevice = "auto" | "webgpu" | "wasm" | "cpu";
+export type TransformersDtype =
+  | "auto"
+  | "fp32"
+  | "fp16"
+  | "q8"
+  | "int8"
+  | "uint8"
+  | "q4"
+  | "bnb4"
+  | "q4f16";
 
 export interface TransformersRuntimeOptions {
   /**
@@ -9,6 +19,12 @@ export interface TransformersRuntimeOptions {
    * falling back to WASM otherwise (verified in poc/RESULTS.md).
    */
   device?: TransformersDevice;
+  /**
+   * Weight quantization. Lower precision uses less memory — useful when a
+   * model OOMs (`std::bad_alloc`) in WASM (see MVP2-RESULTS.md). Defaults to
+   * Transformers.js's own per-device default (q8 for wasm).
+   */
+  dtype?: TransformersDtype;
   worker?: Worker;
 }
 
@@ -27,7 +43,7 @@ export function createTransformersRuntime(
     options.worker ??
     new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
 
-  const model = transformersJS(modelId, { device, worker });
+  const model = transformersJS(modelId, { device, worker, dtype: options.dtype });
 
   return {
     modelId,
