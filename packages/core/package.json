@@ -1,0 +1,12 @@
+{
+  "name": "@browser-ai-sdk/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "ai": "^7.0.91",
+    "@ai-sdk/provider": "^4.0.10"
+  }
+}
