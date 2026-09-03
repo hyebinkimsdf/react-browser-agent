@@ -95,6 +95,7 @@ export function useBrowserChat() {
     status: state.status,
     progress: state.progress,
     error: state.error,
+    activeTool: state.activeTool,
     isLoading: state.status === "loading-model" || state.status === "streaming",
     sendMessage: controller.sendMessage,
     stop: controller.stop,
