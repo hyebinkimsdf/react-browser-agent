@@ -93,3 +93,38 @@ button:disabled {
   color: #dc2626;
   font-size: 13px;
 }
+
+.demo-target-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+}
+
+.demo-target-row button {
+  background: #9ca3af;
+  flex-shrink: 0;
+}
+
+.demo-target-row button.demo-clicked {
+  background: #16a34a;
+}
+
+.chat-tool-call {
+  font-size: 12px;
+  font-family: monospace;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  background: #eef2ff;
+  color: #4338ca;
+  word-break: break-all;
+}
+
+.chat-tool-call-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
