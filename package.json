@@ -1,0 +1,9 @@
+{
+  "name": "browser-ai-sdk-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ]
+}
