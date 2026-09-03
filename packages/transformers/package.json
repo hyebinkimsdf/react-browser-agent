@@ -1,0 +1,13 @@
+{
+  "name": "@browser-ai-sdk/transformers",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@browser-ai-sdk/core": "*",
+    "@browser-ai/transformers-js": "^3.0.2",
+    "@huggingface/transformers": "^4.2.0"
+  }
+}
