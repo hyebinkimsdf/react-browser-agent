@@ -11,6 +11,7 @@
   "dependencies": {
     "@browser-ai-sdk/core": "*",
     "@browser-ai-sdk/react": "*",
+    "@browser-ai-sdk/tools": "*",
     "@browser-ai-sdk/transformers": "*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

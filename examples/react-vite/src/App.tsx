@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { BrowserAIProvider, useBrowserChat } from "@browser-ai-sdk/react";
+import { readOnlyBrowserTools } from "@browser-ai-sdk/tools";
 import "./App.css";
 
-const MODEL_ID = "HuggingFaceTB/SmolLM2-360M-Instruct";
+// Tool calling needs a model that's actually decent at it — HF's own
+// integration guide recommends a reasoning model like Qwen3 over MVP 1's
+// tiny SmolLM2-360M for this reason.
+const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 
 function Chat() {
   const { messages, sendMessage, isLoading, status, progress, error } = useBrowserChat();
@@ -16,9 +20,9 @@ function Chat() {
 
   return (
     <main className="chat-card">
-      <h1>Browser AI SDK — MVP 1</h1>
+      <h1 id="page-title">Browser AI SDK — MVP 2</h1>
       <p className="chat-subtitle">
-        <code>BrowserAIProvider</code> + <code>useBrowserChat()</code> · 모델:{" "}
+        <code>BrowserAIProvider tools={"{"}readOnlyBrowserTools{"}"}</code> · 모델:{" "}
         <code>{MODEL_ID}</code>
       </p>
 
@@ -29,7 +33,7 @@ function Chat() {
 
       <div className="chat-messages">
         {messages.length === 0 && (
-          <div className="chat-empty">아직 대화가 없습니다.</div>
+          <div className="chat-empty">아직 대화가 없습니다. 예: "현재 페이지 제목 알려줘"</div>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`chat-message chat-message-${m.role}`}>
@@ -61,7 +65,7 @@ function Chat() {
 
 function App() {
   return (
-    <BrowserAIProvider model={MODEL_ID} device="auto">
+    <BrowserAIProvider model={MODEL_ID} device="auto" dtype="q4" tools={readOnlyBrowserTools}>
       <Chat />
     </BrowserAIProvider>
   );
