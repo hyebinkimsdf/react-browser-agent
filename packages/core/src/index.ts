@@ -1,5 +1,8 @@
-import { streamText } from "ai";
+import { streamText, stepCountIs, type ToolSet } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
+
+/** Cap on how many tool-call steps a single sendMessage() can chain (guide.md 14, MVP 2). */
+const MAX_TOOL_STEPS = 5;
 
 /**
  * Runtime Interface — Core owns this shape (guide.md 13-③).
@@ -51,7 +54,11 @@ function createId(): string {
     : Math.random().toString(36).slice(2);
 }
 
-export function createChatController(runtime: BrowserAIRuntime): ChatController {
+export function createChatController(
+  runtime: BrowserAIRuntime,
+  options: { tools?: ToolSet } = {},
+): ChatController {
+  const { tools } = options;
   let state: ChatState = {
     status: "loading-model",
     progress: 0,
@@ -105,6 +112,7 @@ export function createChatController(runtime: BrowserAIRuntime): ChatController 
           .filter((m) => m.id !== assistantMessage.id)
           .map((m) => ({ role: m.role, content: m.content })),
         abortSignal: abortController.signal,
+        ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
       });
 
       for await (const chunk of result.textStream) {
