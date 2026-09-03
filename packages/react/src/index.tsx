@@ -7,14 +7,20 @@ import {
   type ReactNode,
 } from "react";
 import { createChatController, type ChatController } from "@browser-ai-sdk/core";
+import type { ToolSet } from "ai";
 import {
   createTransformersRuntime,
   type TransformersDevice,
+  type TransformersDtype,
 } from "@browser-ai-sdk/transformers";
 
 export interface BrowserAIProviderProps {
   model: string;
   device?: TransformersDevice;
+  /** Weight quantization — lower it if a model OOMs on WASM (see MVP2-RESULTS.md). */
+  dtype?: TransformersDtype;
+  /** Browser Tools the model may call (guide.md 5번). Omit for chat-only use. */
+  tools?: ToolSet;
   children: ReactNode;
 }
 
@@ -30,13 +36,19 @@ const ChatControllerContext = createContext<ChatController | null>(null);
  * cycle runs synchronously, so this survives it, while a genuine unmount
  * (no remount follows) still terminates the Worker.
  */
-export function BrowserAIProvider({ model, device, children }: BrowserAIProviderProps) {
+export function BrowserAIProvider({
+  model,
+  device,
+  dtype,
+  tools,
+  children,
+}: BrowserAIProviderProps) {
   const controllerRef = useRef<ChatController | null>(null);
   const disposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!controllerRef.current) {
-    const runtime = createTransformersRuntime(model, { device });
-    controllerRef.current = createChatController(runtime);
+    const runtime = createTransformersRuntime(model, { device, dtype });
+    controllerRef.current = createChatController(runtime, { tools });
   }
 
   useEffect(() => {
