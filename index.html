@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>브라우저 AI 감정 분석기</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>🤖 브라우저 AI 감정 분석기</h1>
+    <p class="subtitle">Transformers.js로 서버 없이, 이 브라우저 안에서 직접 AI 모델을 실행합니다.</p>
+
+    <div id="status" class="status">모델을 불러올 준비 중...</div>
+    <div id="progress-wrap" class="progress-wrap" hidden>
+      <div id="progress-bar" class="progress-bar"></div>
+    </div>
+
+    <textarea
+      id="input"
+      placeholder="분석하고 싶은 영어 문장을 입력해보세요. 예: I love this so much!"
+      disabled
+    ></textarea>
+
+    <button id="analyze-btn" disabled>감정 분석하기</button>
+
+    <div id="result" class="result" hidden>
+      <div class="result-label" id="result-label"></div>
+      <div class="result-bar-wrap">
+        <div class="result-bar" id="result-bar"></div>
+      </div>
+      <div class="result-score" id="result-score"></div>
+    </div>
+
+    <p class="hint">
+      * 첫 실행 시 모델 파일(수십 MB)을 한 번 내려받습니다. 이후에는 브라우저에 캐시되어 빠르게 동작합니다.<br />
+      * 현재 사용 모델은 영어 문장에 최적화되어 있어요.
+    </p>
+  </main>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
