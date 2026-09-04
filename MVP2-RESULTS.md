@@ -39,6 +39,22 @@ Qwen3-0.6B를 기본 dtype(WASM 기본값 q8)으로 로딩하니 `Can't create a
 
 **"GPU면 될 것"이라는 가설은 틀렸다.** onnxruntime-web의 WebGPU 실행 경로도 모델 그래프 로딩/파싱 자체는 WASM 호스트 런타임을 거친 뒤에야 실제 행렬 연산을 GPU로 넘긴다 — 그래서 WASM의 메모리 천장이 CPU 경로든 GPU 경로든 똑같이 적용된다. `device="auto"` 설정 문제가 아니라, 이 정도 크기 모델에 대한 현재 스택(Transformers.js/onnxruntime-web)의 구조적 한계로 판단하고 0.6B로 되돌렸다.
 
+## 후속 확인 (2026-09-04): `enableThinking: false`로 thinking을 못 끔
+
+`<think>` 블록이 그대로 노출되는 문제(위 "알려진 한계" 참고)를 줄여보려고, `@browser-ai/transformers-js`가 지원하는 `providerOptions["transformers-js"].enableThinking` 옵션을 `packages/core`/`packages/react`에 배선하고(`enableThinking` prop) 실제로 `false`를 넣어 테스트했다.
+
+**결과: 그대로 `<think>`가 나온다.** provider 소스(`dist/index.mjs`)를 보면 원인이 명확하다:
+
+```js
+const enableThinking = transformersJsOptions?.enableThinking ?? false;
+...
+...enableThinking ? { enable_thinking: true } : {}
+```
+
+`false`일 땐 `enable_thinking: false`를 명시적으로 안 보내고 **그냥 아무것도 안 보낸다.** Qwen3 채팅 템플릿이 그 값이 없을 때 기본으로 thinking을 켜는 것으로 보인다 — 즉 이 옵션은 "켜기"만 되고 "끄기"는 안 되는 반쪽 스위치다. `packages/react`의 `enableThinking` prop 자체는 남겨뒀다(정상적으로 provider에 값을 전달하는 배선이라 `true`를 넘기는 용도로는 유효), 다만 docstring에 이 한계를 명시했고 예제 앱에선 뺐다.
+
+다음에 시도해볼 것: Qwen3가 프롬프트 레벨에서 지원한다고 알려진 `/no_think` 지시어를 메시지 앞에 붙이는 방식 — 아직 검증 안 함.
+
 ## 다음 단계
 
 이대로 MVP 3(Agent, 다중 Tool 연속 호출, 상호작용 Tool)로 넘어가기 전에, tool 호출 완결 여부를 더 가벼운(0.6B 이하) 모델로 한 번 더 확인하는 걸 권장한다 — "더 큰 모델 + GPU"는 이번 검증으로 막힌 경로다.
