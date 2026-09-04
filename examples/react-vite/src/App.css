@@ -60,6 +60,32 @@ body {
   white-space: pre-wrap;
 }
 
+.chat-thinking {
+  display: inline-block;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.chat-reasoning {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.chat-reasoning summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-reasoning p {
+  white-space: pre-wrap;
+  margin: 6px 0 0;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
 .chat-input-row {
   display: flex;
   gap: 8px;

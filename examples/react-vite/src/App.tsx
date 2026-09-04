@@ -82,7 +82,18 @@ function Chat() {
             <span className="chat-message-role">
               {m.role === "user" ? "나" : "AI"}
             </span>
-            <span className="chat-message-content">{m.content || (isLoading ? "…" : "")}</span>
+            <span className="chat-message-content">
+              {m.isThinking && <span className="chat-thinking">🤔 생각 중…</span>}
+              {m.content || (isLoading && !m.isThinking ? "…" : "")}
+              {/* SDK exposes m.reasoning separately from m.content — the app
+                  decides whether/how to show it. Here: an opt-in <details>. */}
+              {m.reasoning && (
+                <details className="chat-reasoning">
+                  <summary>생각 과정 보기</summary>
+                  <p>{m.reasoning}</p>
+                </details>
+              )}
+            </span>
           </div>
         ))}
       </div>
@@ -107,15 +118,16 @@ function Chat() {
 
 function App() {
   return (
-    // enableThinking={false} now also appends "/no_think" to the outgoing
-    // prompt (packages/core), working around the provider only ever adding
-    // enable_thinking:true and never explicitly sending false.
+    // enableThinking={true}: thinking mode stays ON (better tool-calling —
+    // MVP2-RESULTS.md). Core still splits <think> out into
+    // ChatMessage.reasoning, so this example's UI can hide it from the main
+    // answer without needing thinking off at all.
     <BrowserAIProvider
       model={MODEL_ID}
       device="auto"
       dtype="q4"
       tools={allBrowserTools}
-      enableThinking={false}
+      enableThinking={true}
     >
       <Chat />
     </BrowserAIProvider>
