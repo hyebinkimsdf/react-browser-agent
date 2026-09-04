@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserAIProvider, useBrowserChat } from "@browser-ai-sdk/react";
-import { allBrowserTools } from "@browser-ai-sdk/tools";
+import { allBrowserTools, createRuleBasedRouter } from "@browser-ai-sdk/tools";
 import "./App.css";
 
 // Tool calling needs a model that's actually decent at it — HF's own
@@ -22,10 +22,19 @@ const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 // Testing whether a scoping system prompt reduces overthinking on clear-cut
 // tool-calling requests, keeping thinking ON (unlike /no_think, which skips
 // reasoning entirely and risks tool-selection accuracy).
+//
+// Also testing whether explicit instructions curb two failure modes seen at
+// 0.6B (see QUANTIZATION-RESULTS.md): (1) reasoning-style narration leaking
+// as plain text after </think> instead of stopping, and (2) answers reusing
+// a generic template instead of responding to what the user actually said.
 const SYSTEM_PROMPT =
   "You are a browser automation assistant. For clear, unambiguous requests, " +
   "reason briefly (a sentence or two at most) and go straight to calling the " +
-  "right tool or answering. Don't enumerate every possibility when the answer is obvious.";
+  "right tool or answering. Don't enumerate every possibility when the answer is obvious. " +
+  "All reasoning must stay strictly inside <think></think> tags. Once you close </think>, " +
+  "output ONLY the final answer in Korean — no restating what you're about to say, no meta " +
+  "commentary about the user's message, and stop generating as soon as the answer is complete. " +
+  "Respond specifically to what the user just said instead of reusing a generic greeting or template.";
 
 function Chat() {
   const { messages, sendMessage, isLoading, status, progress, error, activeTool } =
@@ -34,8 +43,21 @@ function Chat() {
   const [demoInputValue, setDemoInputValue] = useState("");
   const [demoClicked, setDemoClicked] = useState(false);
 
+  // Visible timer: how long the current/last message actually took, so
+  // this is checkable without DevTools (see MVP2-RESULTS.md speed tests).
+  const [sentAt, setSentAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  useEffect(() => {
+    if (status !== "streaming" || sentAt === null) return;
+    const id = setInterval(() => setElapsedSec((Date.now() - sentAt) / 1000), 200);
+    return () => clearInterval(id);
+  }, [status, sentAt]);
+
   const handleSend = () => {
     if (!input.trim()) return;
+    setSentAt(Date.now());
+    setElapsedSec(0);
     sendMessage(input);
     setInput("");
   };
@@ -69,6 +91,9 @@ function Chat() {
       <div className="chat-status">
         상태: {status}
         {status === "loading-model" && ` · ${progress}%`}
+        {sentAt !== null && (status === "streaming" || status === "ready") && (
+          <span className="chat-timer"> · {elapsedSec.toFixed(1)}초</span>
+        )}
       </div>
 
       {activeTool && (
@@ -126,16 +151,19 @@ function Chat() {
 
 function App() {
   return (
-    // Testing: thinking ON (keep tool-calling accuracy) + a scoping system
-    // prompt, instead of /no_think, to see if that alone shortens reasoning
-    // on clear requests without giving up thinking entirely.
+    // Testing: cap generation length instead of/alongside the system
+    // prompt — 2048 vs the provider's 8192 default when thinking is on.
+    // Risk: if the model is still mid-<think> at 2048, generation just
+    // stops there with no final answer at all (no budget awareness).
     <BrowserAIProvider
       model={MODEL_ID}
       device="auto"
-      dtype="q4"
+      dtype="fp16"
       tools={allBrowserTools}
+      router={createRuleBasedRouter()}
       enableThinking={true}
       systemPrompt={SYSTEM_PROMPT}
+      maxOutputTokens={2048}
     >
       <Chat />
     </BrowserAIProvider>

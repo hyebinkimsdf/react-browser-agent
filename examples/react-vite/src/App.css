@@ -28,6 +28,12 @@ body {
   margin: 12px 0;
 }
 
+.chat-timer {
+  font-family: monospace;
+  color: #6366f1;
+  font-weight: 600;
+}
+
 .chat-messages {
   min-height: 160px;
   max-height: 320px;
