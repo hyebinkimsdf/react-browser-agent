@@ -19,6 +19,14 @@ import "./App.css";
 // Reverted to 0.6B, which is known to work end-to-end.
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 
+// Testing whether a scoping system prompt reduces overthinking on clear-cut
+// tool-calling requests, keeping thinking ON (unlike /no_think, which skips
+// reasoning entirely and risks tool-selection accuracy).
+const SYSTEM_PROMPT =
+  "You are a browser automation assistant. For clear, unambiguous requests, " +
+  "reason briefly (a sentence or two at most) and go straight to calling the " +
+  "right tool or answering. Don't enumerate every possibility when the answer is obvious.";
+
 function Chat() {
   const { messages, sendMessage, isLoading, status, progress, error, activeTool } =
     useBrowserChat();
@@ -118,16 +126,16 @@ function Chat() {
 
 function App() {
   return (
-    // enableThinking={true}: thinking mode stays ON (better tool-calling —
-    // MVP2-RESULTS.md). Core still splits <think> out into
-    // ChatMessage.reasoning, so this example's UI can hide it from the main
-    // answer without needing thinking off at all.
+    // Testing: thinking ON (keep tool-calling accuracy) + a scoping system
+    // prompt, instead of /no_think, to see if that alone shortens reasoning
+    // on clear requests without giving up thinking entirely.
     <BrowserAIProvider
       model={MODEL_ID}
       device="auto"
       dtype="q4"
       tools={allBrowserTools}
       enableThinking={true}
+      systemPrompt={SYSTEM_PROMPT}
     >
       <Chat />
     </BrowserAIProvider>

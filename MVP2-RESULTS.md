@@ -79,6 +79,20 @@ const enableThinking = transformersJsOptions?.enableThinking ?? false;
 
 실제 테스트 결과: 화면엔 `"Hey there! 🌟"`만 보이고 `<think>` 텍스트는 전혀 노출 안 됨, `.chat-reasoning` 안에 실제 추론 텍스트("Okay, the user wants a short sentence...")가 정상적으로 들어있는 것 확인. `isThinking`이 true인 동안 "🤔 생각 중…" 표시도 정상 동작.
 
+## 후속 확인 (2026-09-04): system prompt로 오버씽킹 줄이기 시도 — 그 과정에서 진짜 버그 두 개 발견, 그리고 마침내 tool 호출 완결
+
+Qwen3의 "오버씽킹"(간단한 요청에도 여러 경우의 수를 길게 따지는 것)을 줄이려고 `packages/core`/`packages/react`에 `systemPrompt` 옵션을 새로 추가했다("명확한 요청엔 짧게 생각하고 바로 tool을 부르거나 답해라" 같은 지침을 매 턴 system 메시지로 보냄).
+
+**버그 1 — system을 `messages` 배열에 넣으면 즉시 크래시.** AI SDK가 `messages` 안의 `system` role을 거부한다: `AI_InvalidPromptError: System messages are not allowed in the prompt or messages fields. Use the instructions option instead.` 처음엔 이 에러가 나는지도 모르고 5분을 그냥 날렸다(콘솔을 안 보고 DOM만 지켜봤어서) — `streamText()`의 최상위 `system` 옵션으로 바꿔서 고쳤다.
+
+**실제 tool-calling 테스트 — 처음으로 끝까지 완료됨.** `"#demo-accept-button 버튼을 클릭해줘"`를 보냈더니, **262초** 만에 `clickElement({"selector":"button#accept-cookies"})`를 실제로 호출했다. MVP2/3에서 계속 못 봤던 "tool 호출이 실제로 끝까지 완료되는 것"을 처음 확인한 것.
+
+다만 **정확도 문제**: 실제 데모 엘리먼트의 id는 `#demo-accept-button`인데, 모델이 `#accept-cookies`(쿠키 동의 버튼이라는 흔한 웹 패턴을 그냥 추측한 값)를 만들어내서 호출했다 — `getPageText`/`findElement`로 실제 id를 먼저 확인하지 않고 그럴듯한 값을 바로 지어낸 것. `clickElement`는 `{"clicked": false}`를 정확히 반환했다(엘리먼트가 없으니 정상 동작). system prompt로 속도를 줄이려던 시도는 뚜렷한 효과는 못 봤고(여전히 250초+), 대신 이 완결 테스트 자체가 더 값진 결과였다.
+
+**버그 2 — `<think>`가 두 번 나오면 두 번째가 화면에 샘.** 위 tool 호출 과정에서 model_step이 두 번 실행됐다(1차 사고 → tool 호출 → 결과 받고 2차 사고). `parseThinking()`이 처음엔 첫 번째 `<think>...</think>` 쌍만 찾고 그 뒤는 전부 `content`로 취급해서, 두 번째(닫히지 않은) `<think>` 태그가 그대로 화면에 노출됐다. 여러 `<think>` 블록을 순회하며 전부 `reasoning`으로 모으도록 고쳤고, 유닛 테스트로 재현·검증했다.
+
+**결론**: system prompt로 오버씽킹을 줄이는 건 이번엔 효과가 뚜렷하지 않았지만, 그 과정에서 실제 버그 2개를 잡았고 무엇보다 **tool 호출 완결을 처음 확인**했다 — 다만 셀렉터를 지어내는 정확도 문제가 새로 드러났다. 다음 방향은 시스템 프롬프트에 "모르는 엘리먼트는 먼저 findElement/getPageText로 확인하라"는 지침을 넣어 정확도를 개선하는 것.
+
 ## 다음 단계
 
-이대로 MVP 3(Agent, 다중 Tool 연속 호출, 상호작용 Tool)로 넘어가기 전에, tool 호출 완결 여부를 더 가벼운(0.6B 이하) 모델로 한 번 더 확인하는 걸 권장한다 — "더 큰 모델 + GPU"는 이번 검증으로 막힌 경로다.
+이대로 MVP 3(Agent, 다중 Tool 연속 호출, 상호작용 Tool)로 넘어가기 전에, tool 호출 완결 여부를 더 가벼운(0.6B 이하) 모델로 한 번 더 확인하는 걸 권장한다 — "더 큰 모델 + GPU"는 이번 검증으로 막힌 경로다. 추가로: 셀렉터 지어내기 방지를 위한 system prompt 튜닝도 남은 과제.
