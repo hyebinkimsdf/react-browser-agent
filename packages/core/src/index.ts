@@ -27,7 +27,38 @@ export interface BrowserAIRuntime {
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
+  /** Final answer text — never contains <think> markup, even with thinking on. */
   content: string;
+  /**
+   * Text from inside <think>...</think> (Qwen3-style reasoning models),
+   * parsed out of the raw stream — empty string for non-reasoning models
+   * or turns where the model didn't reason. The SDK never renders this;
+   * showing it (e.g. in a collapsible <details>) is entirely up to the
+   * consuming app.
+   */
+  reasoning: string;
+  /** True while the model is inside an unclosed <think> block right now. */
+  isThinking: boolean;
+}
+
+/** Splits a model's raw output into (reasoning, content, isThinking) around <think>...</think>. */
+function parseThinking(raw: string): { content: string; reasoning: string; isThinking: boolean } {
+  const start = raw.indexOf("<think>");
+  if (start === -1) {
+    return { content: raw, reasoning: "", isThinking: false };
+  }
+
+  const afterStart = start + "<think>".length;
+  const end = raw.indexOf("</think>", afterStart);
+  const before = raw.slice(0, start);
+
+  if (end === -1) {
+    return { content: before, reasoning: raw.slice(afterStart), isThinking: true };
+  }
+
+  const reasoning = raw.slice(afterStart, end).trim();
+  const after = raw.slice(end + "</think>".length).replace(/^\n+/, "");
+  return { content: before + after, reasoning, isThinking: false };
 }
 
 export type ChatStatus = "loading-model" | "ready" | "streaming" | "error";
@@ -105,8 +136,21 @@ export function createChatController(
     await readyPromise;
     if (!model) return; // prepare() failed — state already reflects the error
 
-    const userMessage: ChatMessage = { id: createId(), role: "user", content: trimmed };
-    const assistantMessage: ChatMessage = { id: createId(), role: "assistant", content: "" };
+    const userMessage: ChatMessage = {
+      id: createId(),
+      role: "user",
+      content: trimmed,
+      reasoning: "",
+      isThinking: false,
+    };
+    const assistantMessage: ChatMessage = {
+      id: createId(),
+      role: "assistant",
+      content: "",
+      reasoning: "",
+      isThinking: false,
+    };
+    let rawAssistantText = "";
 
     setState({
       status: "streaming",
@@ -149,13 +193,16 @@ export function createChatController(
       // fullStream (not textStream) so tool-call/tool-result events surface too.
       for await (const part of result.fullStream) {
         switch (part.type) {
-          case "text-delta":
+          case "text-delta": {
+            rawAssistantText += part.text;
+            const parsed = parseThinking(rawAssistantText);
             setState({
               messages: state.messages.map((m) =>
-                m.id === assistantMessage.id ? { ...m, content: m.content + part.text } : m,
+                m.id === assistantMessage.id ? { ...m, ...parsed } : m,
               ),
             });
             break;
+          }
           case "tool-call":
             setState({
               activeTool: { toolName: part.toolName, input: part.input, status: "calling" },
