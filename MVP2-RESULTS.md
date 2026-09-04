@@ -69,6 +69,16 @@ const enableThinking = transformersJsOptions?.enableThinking ?? false;
 
 즉 template의 `enable_thinking:false` 프리필과 똑같은 결과(빈 think 블록)를, provider 버그를 우회해서 프롬프트 레벨로 얻어냈다. 빈 `<think></think>` 자체는 여전히 텍스트로 남아있어서, UI에서 완전히 깔끔하게 보이려면 정규식으로 걸러내는 후처리가 추가로 필요하다(아직 안 함).
 
+## 후속 확인 (2026-09-04): thinking은 켠 채로, `<think>`만 화면에서 분리
+
+`/no_think`로 껐을 때 나오는 속도 이득은 확인했지만, tool calling 정확도엔 thinking이 도움된다는 게 애초에 이 모델을 고른 이유였다(위 참고). 그래서 thinking은 켠 채로 유지하고, **`<think>` 텍스트 자체를 화면에 안 보이게** 하는 쪽으로 방향을 잡았다.
+
+`packages/core`의 `ChatMessage`에 `reasoning: string`과 `isThinking: boolean`을 추가하고, `text-delta`가 올 때마다 누적된 원본 텍스트를 매번 다시 파싱해서 `<think>...</think>` 안쪽은 `reasoning`으로, 바깥쪽은 `content`로 분리했다(`parseThinking()`, 순수 함수라 유닛 테스트로 검증 — 스트리밍 중 청크가 태그 중간에서 끊기는 경우 포함). `ChatMessage.content`는 이제 **thinking을 켜든 끄든 `<think>` 마크업이 절대 안 들어간다.**
+
+**설계 결정: SDK는 reasoning을 감추지 않고 분리만 한다.** `content`/`reasoning`을 어떻게 보여줄지(숨기기/접기/펼치기)는 전적으로 SDK를 쓰는 앱의 몫이다 — `examples/react-vite`에서는 `reasoning`이 있으면 `<details>`로 접어서 보여주는 식으로 데모했다(기본은 접힘, 원하면 펼쳐볼 수 있음).
+
+실제 테스트 결과: 화면엔 `"Hey there! 🌟"`만 보이고 `<think>` 텍스트는 전혀 노출 안 됨, `.chat-reasoning` 안에 실제 추론 텍스트("Okay, the user wants a short sentence...")가 정상적으로 들어있는 것 확인. `isThinking`이 true인 동안 "🤔 생각 중…" 표시도 정상 동작.
+
 ## 다음 단계
 
 이대로 MVP 3(Agent, 다중 Tool 연속 호출, 상호작용 Tool)로 넘어가기 전에, tool 호출 완결 여부를 더 가벼운(0.6B 이하) 모델로 한 번 더 확인하는 걸 권장한다 — "더 큰 모델 + GPU"는 이번 검증으로 막힌 경로다.
