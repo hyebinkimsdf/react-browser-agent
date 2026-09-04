@@ -107,11 +107,16 @@ function Chat() {
 
 function App() {
   return (
-    // enableThinking={false} was tried here and reverted — it doesn't
-    // actually disable Qwen3's thinking (see MVP2-RESULTS.md): the provider
-    // only ever *adds* enable_thinking:true, never explicitly forces it
-    // off, so the model's own template default (thinking on) still wins.
-    <BrowserAIProvider model={MODEL_ID} device="auto" dtype="q4" tools={allBrowserTools}>
+    // enableThinking={false} now also appends "/no_think" to the outgoing
+    // prompt (packages/core), working around the provider only ever adding
+    // enable_thinking:true and never explicitly sending false.
+    <BrowserAIProvider
+      model={MODEL_ID}
+      device="auto"
+      dtype="q4"
+      tools={allBrowserTools}
+      enableThinking={false}
+    >
       <Chat />
     </BrowserAIProvider>
   );

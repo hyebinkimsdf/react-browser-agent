@@ -53,7 +53,21 @@ const enableThinking = transformersJsOptions?.enableThinking ?? false;
 
 `false`일 땐 `enable_thinking: false`를 명시적으로 안 보내고 **그냥 아무것도 안 보낸다.** Qwen3 채팅 템플릿이 그 값이 없을 때 기본으로 thinking을 켜는 것으로 보인다 — 즉 이 옵션은 "켜기"만 되고 "끄기"는 안 되는 반쪽 스위치다. `packages/react`의 `enableThinking` prop 자체는 남겨뒀다(정상적으로 provider에 값을 전달하는 배선이라 `true`를 넘기는 용도로는 유효), 다만 docstring에 이 한계를 명시했고 예제 앱에선 뺐다.
 
-다음에 시도해볼 것: Qwen3가 프롬프트 레벨에서 지원한다고 알려진 `/no_think` 지시어를 메시지 앞에 붙이는 방식 — 아직 검증 안 함.
+## 후속 확인 (2026-09-04): `/no_think`는 실제로 됨
+
+원인을 더 파보니, Qwen3의 채팅 템플릿 자체엔 `enable_thinking is defined and is false`일 때 `<think>\n\n</think>\n\n`을 미리 채워 넣는 로직이 있다:
+
+```jinja
+{%- if enable_thinking is defined and enable_thinking is false %}
+    {{- '<think>\n\n</think>\n\n' }}
+{%- endif %}
+```
+
+문제는 provider가 `false`일 때 이 변수 자체를 안 보낸다는 것(위 참고) — 그래서 이 분기가 발동을 못 했던 것. 이건 우회할 방법이 없어 보여서, 대신 **모델 자체에 학습돼 있다는 `/no_think` 프롬프트 지시어**를 시도했다: `enableThinking === false`일 때 `packages/core`의 `sendMessage`가 실제로 모델에 보내는 프롬프트의 마지막 사용자 메시지 끝에 ` /no_think`를 붙이도록 했다(화면에 표시되는 `ChatMessage.content`는 그대로 두고, 모델에 보내는 값만 조작).
+
+**결과: 됐다.** 응답이 `"<think>\n\n</think>\n\nHello!"`로 나왔다 — `<think>` 태그 자체는 남아있지만 **안이 비어있다**(실제 추론 텍스트를 생성 안 함). 속도도 확 빨라졌다: 메시지 전송부터 완료까지 **44초** (MVP 3에서 비슷한 인사말에 4분 넘게 걸렸던 것과 비교됨).
+
+즉 template의 `enable_thinking:false` 프리필과 똑같은 결과(빈 think 블록)를, provider 버그를 우회해서 프롬프트 레벨로 얻어냈다. 빈 `<think></think>` 자체는 여전히 텍스트로 남아있어서, UI에서 완전히 깔끔하게 보이려면 정규식으로 걸러내는 후처리가 추가로 필요하다(아직 안 함).
 
 ## 다음 단계
 
