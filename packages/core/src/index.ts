@@ -41,24 +41,45 @@ export interface ChatMessage {
   isThinking: boolean;
 }
 
-/** Splits a model's raw output into (reasoning, content, isThinking) around <think>...</think>. */
+/**
+ * Splits a model's raw output into (reasoning, content, isThinking) around
+ * every <think>...</think> segment — not just the first. Multi-step tool
+ * calling re-enters model_step after a tool result, and the model can open
+ * a fresh <think> block each time (found via real testing: a second,
+ * unclosed <think> was leaking straight into content because the first
+ * version only ever looked for one pair).
+ */
 function parseThinking(raw: string): { content: string; reasoning: string; isThinking: boolean } {
-  const start = raw.indexOf("<think>");
-  if (start === -1) {
-    return { content: raw, reasoning: "", isThinking: false };
+  let content = "";
+  const reasoningParts: string[] = [];
+  let isThinking = false;
+  let cursor = 0;
+
+  for (;;) {
+    const start = raw.indexOf("<think>", cursor);
+    if (start === -1) {
+      content += raw.slice(cursor);
+      break;
+    }
+    content += raw.slice(cursor, start);
+
+    const afterStart = start + "<think>".length;
+    const end = raw.indexOf("</think>", afterStart);
+    if (end === -1) {
+      reasoningParts.push(raw.slice(afterStart));
+      isThinking = true;
+      break;
+    }
+
+    reasoningParts.push(raw.slice(afterStart, end).trim());
+    cursor = end + "</think>".length;
   }
 
-  const afterStart = start + "<think>".length;
-  const end = raw.indexOf("</think>", afterStart);
-  const before = raw.slice(0, start);
-
-  if (end === -1) {
-    return { content: before, reasoning: raw.slice(afterStart), isThinking: true };
-  }
-
-  const reasoning = raw.slice(afterStart, end).trim();
-  const after = raw.slice(end + "</think>".length).replace(/^\n+/, "");
-  return { content: before + after, reasoning, isThinking: false };
+  return {
+    content: content.replace(/^\n+/, ""),
+    reasoning: reasoningParts.join("\n\n").trim(),
+    isThinking,
+  };
 }
 
 export type ChatStatus = "loading-model" | "ready" | "streaming" | "error";
@@ -97,9 +118,9 @@ function createId(): string {
 
 export function createChatController(
   runtime: BrowserAIRuntime,
-  options: { tools?: ToolSet; enableThinking?: boolean } = {},
+  options: { tools?: ToolSet; enableThinking?: boolean; systemPrompt?: string } = {},
 ): ChatController {
-  const { tools, enableThinking } = options;
+  const { tools, enableThinking, systemPrompt } = options;
   let state: ChatState = {
     status: "loading-model",
     progress: 0,
@@ -162,6 +183,9 @@ export function createChatController(
     abortController = new AbortController();
 
     try {
+      // AI SDK rejects a "system" role inside messages ("Use the instructions
+      // option instead") — streamText's own top-level `system` param is the
+      // correct way to send it, not the messages array.
       const promptMessages = state.messages
         .filter((m) => m.id !== assistantMessage.id)
         .map((m) => ({ role: m.role, content: m.content }));
@@ -182,6 +206,7 @@ export function createChatController(
         model,
         messages: promptMessages,
         abortSignal: abortController.signal,
+        ...(systemPrompt ? { system: systemPrompt } : {}),
         ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
         // "transformers-js" provider key: see @browser-ai/transformers-js
         // dist/index.mjs — reads providerOptions["transformers-js"].enableThinking.

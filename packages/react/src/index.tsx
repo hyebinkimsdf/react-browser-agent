@@ -30,6 +30,13 @@ export interface BrowserAIProviderProps {
    * disables thinking depends on the model's own chat template default.
    */
   enableThinking?: boolean;
+  /**
+   * Prepended as a "system" message on every sendMessage() call. Use it to
+   * bound how much the model deliberates on clear-cut requests, e.g.
+   * "For unambiguous requests, reason briefly and go straight to the
+   * answer or tool call." No system prompt is sent by default.
+   */
+  systemPrompt?: string;
   children: ReactNode;
 }
 
@@ -69,6 +76,7 @@ export function BrowserAIProvider({
   dtype,
   tools,
   enableThinking,
+  systemPrompt,
   children,
 }: BrowserAIProviderProps) {
   const [controller, setController] = useState<ChatController | null>(null);
@@ -87,7 +95,7 @@ export function BrowserAIProvider({
 
     if (!controllerRef.current) {
       const runtime = createTransformersRuntime(model, { device, dtype });
-      const created = createChatController(runtime, { tools, enableThinking });
+      const created = createChatController(runtime, { tools, enableThinking, systemPrompt });
       controllerRef.current = created;
       setController(created);
     }
