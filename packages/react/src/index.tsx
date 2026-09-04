@@ -22,6 +22,14 @@ export interface BrowserAIProviderProps {
   dtype?: TransformersDtype;
   /** Browser Tools the model may call (guide.md 5번). Omit for chat-only use. */
   tools?: ToolSet;
+  /**
+   * Forwarded to the provider as providerOptions["transformers-js"].enableThinking.
+   * Only reasoning models (e.g. Qwen3) honor this. NOTE: the provider only
+   * ever *adds* enable_thinking:true when true — passing false doesn't
+   * force it off, it just omits the flag, so whether this actually
+   * disables thinking depends on the model's own chat template default.
+   */
+  enableThinking?: boolean;
   children: ReactNode;
 }
 
@@ -60,6 +68,7 @@ export function BrowserAIProvider({
   device,
   dtype,
   tools,
+  enableThinking,
   children,
 }: BrowserAIProviderProps) {
   const [controller, setController] = useState<ChatController | null>(null);
@@ -78,7 +87,7 @@ export function BrowserAIProvider({
 
     if (!controllerRef.current) {
       const runtime = createTransformersRuntime(model, { device, dtype });
-      const created = createChatController(runtime, { tools });
+      const created = createChatController(runtime, { tools, enableThinking });
       controllerRef.current = created;
       setController(created);
     }

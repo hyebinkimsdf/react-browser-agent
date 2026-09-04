@@ -66,9 +66,9 @@ function createId(): string {
 
 export function createChatController(
   runtime: BrowserAIRuntime,
-  options: { tools?: ToolSet } = {},
+  options: { tools?: ToolSet; enableThinking?: boolean } = {},
 ): ChatController {
-  const { tools } = options;
+  const { tools, enableThinking } = options;
   let state: ChatState = {
     status: "loading-model",
     progress: 0,
@@ -125,6 +125,11 @@ export function createChatController(
           .map((m) => ({ role: m.role, content: m.content })),
         abortSignal: abortController.signal,
         ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
+        // "transformers-js" provider key: see @browser-ai/transformers-js
+        // dist/index.mjs — reads providerOptions["transformers-js"].enableThinking.
+        ...(enableThinking !== undefined
+          ? { providerOptions: { "transformers-js": { enableThinking } } }
+          : {}),
       });
 
       // fullStream (not textStream) so tool-call/tool-result events surface too.
