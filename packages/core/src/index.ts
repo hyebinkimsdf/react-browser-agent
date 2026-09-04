@@ -110,6 +110,38 @@ export interface ChatController {
   dispose(): void;
 }
 
+/** A router match: run this tool directly, skipping the model entirely. */
+export interface ToolRouteMatch {
+  toolName: string;
+  input: unknown;
+}
+
+/**
+ * Cheap synchronous pre-filter checked before every sendMessage() falls
+ * through to the model. A match executes that tool immediately — no LLM
+ * inference for that turn at all, which is the whole point (a full Qwen
+ * forward pass, thinking included, costs orders of magnitude more than a
+ * regex). Returning null falls through to the normal streamText() + tools
+ * flow, unchanged. Keep routers narrow: only match phrasing you're sure
+ * about, since a wrong match runs a tool without the model ever reasoning
+ * about it.
+ */
+export type ToolRouter = (text: string) => ToolRouteMatch | null;
+
+/**
+ * `ToolSet[string]["execute"]` doesn't collapse to one callable signature —
+ * ToolSet is a union of four `Tool<...>` input/output/context variants, so
+ * TS synthesizes overloads (one requiring `input: never`) instead of one
+ * general `(input: unknown) => unknown`. The routed tool is known-safe by
+ * construction (its own ToolRouter picked its toolName), so this local,
+ * deliberately loose signature — and the narrowing cast where it's used —
+ * is a controlled workaround for that, not a real type hole.
+ */
+type RoutedToolExecute = (
+  input: unknown,
+  options: { toolCallId: string; messages: never[] },
+) => unknown;
+
 function createId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -118,9 +150,23 @@ function createId(): string {
 
 export function createChatController(
   runtime: BrowserAIRuntime,
-  options: { tools?: ToolSet; enableThinking?: boolean; systemPrompt?: string } = {},
+  options: {
+    tools?: ToolSet;
+    enableThinking?: boolean;
+    systemPrompt?: string;
+    /**
+     * Caps generation length (provider default: 8192 w/ thinking on, 4096
+     * off — packages/transformers). Generation just gets cut off wherever
+     * it is when the budget runs out — the model has no awareness of the
+     * remaining budget — so setting this too low risks truncating mid
+     * <think> with no final answer at all.
+     */
+    maxOutputTokens?: number;
+    /** Checked before the model on every sendMessage() — see ToolRouter. */
+    router?: ToolRouter;
+  } = {},
 ): ChatController {
-  const { tools, enableThinking, systemPrompt } = options;
+  const { tools, enableThinking, systemPrompt, maxOutputTokens, router } = options;
   let state: ChatState = {
     status: "loading-model",
     progress: 0,
@@ -180,6 +226,17 @@ export function createChatController(
       messages: [...state.messages, userMessage, assistantMessage],
     });
 
+    const routed = tools && router ? router(trimmed) : null;
+    const routedTool = routed ? tools?.[routed.toolName] : undefined;
+    if (routed && routedTool?.execute) {
+      await runRoutedTool(
+        routedTool.execute as unknown as RoutedToolExecute,
+        routed,
+        assistantMessage.id,
+      );
+      return;
+    }
+
     abortController = new AbortController();
 
     try {
@@ -207,6 +264,7 @@ export function createChatController(
         messages: promptMessages,
         abortSignal: abortController.signal,
         ...(systemPrompt ? { system: systemPrompt } : {}),
+        ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
         ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
         // "transformers-js" provider key: see @browser-ai/transformers-js
         // dist/index.mjs — reads providerOptions["transformers-js"].enableThinking.
@@ -256,6 +314,35 @@ export function createChatController(
       setState({
         status: "error",
         error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /** Runs a router-matched tool directly — no model call for this turn. */
+  async function runRoutedTool(
+    execute: RoutedToolExecute,
+    routed: ToolRouteMatch,
+    assistantMessageId: string,
+  ) {
+    setState({
+      activeTool: { toolName: routed.toolName, input: routed.input, status: "calling" },
+    });
+    try {
+      const output = await execute(routed.input, { toolCallId: createId(), messages: [] });
+      setState({
+        status: "ready",
+        activeTool: { toolName: routed.toolName, input: routed.input, status: "done", output },
+        messages: state.messages.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content: typeof output === "string" ? output : JSON.stringify(output) }
+            : m,
+        ),
+      });
+    } catch (err) {
+      setState({
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+        activeTool: { toolName: routed.toolName, input: routed.input, status: "error" },
       });
     }
   }

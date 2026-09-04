@@ -7,7 +7,12 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { createChatController, type ChatController, type ChatState } from "@browser-ai-sdk/core";
+import {
+  createChatController,
+  type ChatController,
+  type ChatState,
+  type ToolRouter,
+} from "@browser-ai-sdk/core";
 import type { ToolSet } from "ai";
 import {
   createTransformersRuntime,
@@ -23,6 +28,12 @@ export interface BrowserAIProviderProps {
   /** Browser Tools the model may call (guide.md 5번). Omit for chat-only use. */
   tools?: ToolSet;
   /**
+   * Checked on every sendMessage() before the model. A match runs that tool
+   * directly, skipping the Qwen forward pass entirely for that turn — see
+   * ToolRouter in @browser-ai-sdk/core. Omit to always go through the model.
+   */
+  router?: ToolRouter;
+  /**
    * Forwarded to the provider as providerOptions["transformers-js"].enableThinking.
    * Only reasoning models (e.g. Qwen3) honor this. NOTE: the provider only
    * ever *adds* enable_thinking:true when true — passing false doesn't
@@ -37,6 +48,12 @@ export interface BrowserAIProviderProps {
    * answer or tool call." No system prompt is sent by default.
    */
   systemPrompt?: string;
+  /**
+   * Caps generation length (provider default: 8192 w/ thinking on, 4096
+   * off). Generation is cut off wherever it is when the budget runs out —
+   * set too low, it can truncate mid <think> with no final answer at all.
+   */
+  maxOutputTokens?: number;
   children: ReactNode;
 }
 
@@ -75,8 +92,10 @@ export function BrowserAIProvider({
   device,
   dtype,
   tools,
+  router,
   enableThinking,
   systemPrompt,
+  maxOutputTokens,
   children,
 }: BrowserAIProviderProps) {
   const [controller, setController] = useState<ChatController | null>(null);
@@ -95,7 +114,13 @@ export function BrowserAIProvider({
 
     if (!controllerRef.current) {
       const runtime = createTransformersRuntime(model, { device, dtype });
-      const created = createChatController(runtime, { tools, enableThinking, systemPrompt });
+      const created = createChatController(runtime, {
+        tools,
+        router,
+        enableThinking,
+        systemPrompt,
+        maxOutputTokens,
+      });
       controllerRef.current = created;
       setController(created);
     }
@@ -108,7 +133,7 @@ export function BrowserAIProvider({
         disposeTimerRef.current = null;
       }, 0);
     };
-    // model/device/dtype/tools are intentionally init-only, same as before.
+    // model/device/dtype/tools/router are intentionally init-only, same as before.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -170,3 +170,43 @@ export const allBrowserTools = {
   ...readOnlyBrowserTools,
   ...interactionBrowserTools,
 };
+
+/**
+ * A narrow, regex-based ToolRouter (see @browser-ai-sdk/core) covering only
+ * the three interaction tools, and only when the message names an explicit
+ * CSS selector (starts with # or .). Anything vaguer — "그 버튼 클릭해줘" with
+ * no selector, or a selector the regex doesn't recognize — returns null and
+ * falls through to the model, which can still resolve it (e.g. via
+ * findElement first). The goal isn't covering every phrasing; it's skipping
+ * a full Qwen forward pass for the unambiguous cases a demo/UI actually
+ * produces.
+ */
+export function createRuleBasedRouter(): (text: string) => { toolName: string; input: unknown } | null {
+  const CLICK = /([.#][\w-]+).{0,10}?(클릭|눌러|누르|click)/i;
+  const FILL = /([.#][\w-]+)\s*(?:에|:)\s*['"]?([^'"\n]+?)['"]?\s*(?:라고|을|를)?\s*(입력|채워|fill)/i;
+  const SCROLL = /(맨\s*위|맨\s*아래|위|아래|top|bottom|up|down).{0,10}?(스크롤|scroll)/i;
+
+  return (text: string) => {
+    const fill = text.match(FILL);
+    if (fill) return { toolName: "fillInput", input: { selector: fill[1], value: fill[2].trim() } };
+
+    const click = text.match(CLICK);
+    if (click) return { toolName: "clickElement", input: { selector: click[1] } };
+
+    const scroll = text.match(SCROLL);
+    if (scroll) {
+      const raw = scroll[1].replace(/\s+/g, "");
+      const direction =
+        raw === "맨위" || raw === "top"
+          ? "top"
+          : raw === "맨아래" || raw === "bottom"
+            ? "bottom"
+            : raw === "위" || raw === "up"
+              ? "up"
+              : "down";
+      return { toolName: "scrollPage", input: { direction } };
+    }
+
+    return null;
+  };
+}
