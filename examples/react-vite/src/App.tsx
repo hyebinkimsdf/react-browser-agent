@@ -8,10 +8,15 @@ import "./App.css";
 // tiny SmolLM2-360M for this reason.
 //
 // Tried Qwen3-1.7B for better Korean quality (0.6B's Korean output was
-// noticeably broken) but it OOMs in this dev environment even at the
-// smallest available quantization (q4: 2.15GB fails to even buffer the
-// download; q4f16: 1.43GB downloads fine but WASM session creation still
-// hits std::bad_alloc). Reverted to 0.6B, which is known to work.
+// noticeably broken). OOMs with std::bad_alloc on WASM (CPU) — expected,
+// low memory ceiling. Re-tested with a real GPU (WebGPU actually acquired
+// this time, confirmed via console — no "GPU adapter unavailable" fallback
+// warning) and it OOM'd the same way. onnxruntime-web's WebGPU execution
+// provider still loads/parses the model graph through its WASM host
+// runtime before handing tensor math to the GPU, so the same WASM memory
+// ceiling applies on both paths — this isn't a device="auto" config
+// problem, it's a current limitation of this stack for a model this size.
+// Reverted to 0.6B, which is known to work end-to-end.
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 
 function Chat() {

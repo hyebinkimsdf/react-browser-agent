@@ -31,6 +31,14 @@ Qwen3-0.6B를 기본 dtype(WASM 기본값 q8)으로 로딩하니 `Can't create a
 - reasoning 모델(Qwen3)의 `<think>` 블록이 그대로 `ChatMessage.content`에 섞여 들어간다. UI에서 reasoning과 최종 답변을 구분해서 보여주는 처리는 없다 (MVP 3 이후 검토).
 - Tool 호출/결과 자체를 `ChatState`에 노출하지 않는다 — guide.md도 이건 MVP 3("Tool execution 상태 관리") 범위로 명시했으므로 의도된 범위.
 
+## 후속 검증 (2026-09-04): 실제 GPU에서도 1.7B는 안 됨 — 가설 정정
+
+한국어 품질 개선을 위해 `Qwen3-1.7B-ONNX`(`dtype="q4f16"`, 1.43GB)로 다시 시도해봤다. 처음엔 "headless 테스트 환경에 GPU가 없어서 WASM으로 떨어진 게 원인"이라고 판단해서, 실제 GPU가 있는 사용자 브라우저에서 재검증했다.
+
+**결과: 실제 GPU(WebGPU)로도 똑같이 `std::bad_alloc`.** 콘솔에 `"GPU adapter unavailable"` 같은 폴백 경고는 없었고, 오히려 WebGPU 어댑터가 실제로 잡혔을 때만 뜨는 Chrome 경고(`powerPreference ignored on Windows`)가 있었다 — 즉 이번엔 진짜 GPU 경로로 시도했는데도 실패한 것.
+
+**"GPU면 될 것"이라는 가설은 틀렸다.** onnxruntime-web의 WebGPU 실행 경로도 모델 그래프 로딩/파싱 자체는 WASM 호스트 런타임을 거친 뒤에야 실제 행렬 연산을 GPU로 넘긴다 — 그래서 WASM의 메모리 천장이 CPU 경로든 GPU 경로든 똑같이 적용된다. `device="auto"` 설정 문제가 아니라, 이 정도 크기 모델에 대한 현재 스택(Transformers.js/onnxruntime-web)의 구조적 한계로 판단하고 0.6B로 되돌렸다.
+
 ## 다음 단계
 
-이대로 MVP 3(Agent, 다중 Tool 연속 호출, 상호작용 Tool)로 넘어가기 전에, tool 호출 완결 여부를 더 가벼운 모델이나 실제 GPU 환경에서 한 번 더 확인하는 걸 권장한다.
+이대로 MVP 3(Agent, 다중 Tool 연속 호출, 상호작용 Tool)로 넘어가기 전에, tool 호출 완결 여부를 더 가벼운(0.6B 이하) 모델로 한 번 더 확인하는 걸 권장한다 — "더 큰 모델 + GPU"는 이번 검증으로 막힌 경로다.
