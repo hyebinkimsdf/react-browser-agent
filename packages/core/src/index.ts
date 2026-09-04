@@ -118,11 +118,25 @@ export function createChatController(
     abortController = new AbortController();
 
     try {
+      const promptMessages = state.messages
+        .filter((m) => m.id !== assistantMessage.id)
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      // Qwen's chat template only pre-empties <think> when enable_thinking
+      // is explicitly false — @browser-ai/transformers-js's option only
+      // ever *adds* enable_thinking:true, never sends false (see
+      // MVP2-RESULTS.md), so that template branch never fires. "/no_think"
+      // is a trained, prompt-level behavior in Qwen3 itself (independent of
+      // the template variable) — append it only to the outgoing prompt, not
+      // to the displayed ChatMessage.content.
+      if (enableThinking === false) {
+        const last = promptMessages.at(-1);
+        if (last?.role === "user") last.content = `${last.content} /no_think`;
+      }
+
       const result = streamText({
         model,
-        messages: state.messages
-          .filter((m) => m.id !== assistantMessage.id)
-          .map((m) => ({ role: m.role, content: m.content })),
+        messages: promptMessages,
         abortSignal: abortController.signal,
         ...(tools ? { tools, stopWhen: stepCountIs(MAX_TOOL_STEPS) } : {}),
         // "transformers-js" provider key: see @browser-ai/transformers-js
